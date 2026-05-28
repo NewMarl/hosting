@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  # Единая точка входа (http://localhost)
+  gateway:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx_proxy.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - paas_network
+    restart: always
+
+  # FastAPI приложение
+  app:
+    build: .
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    # Внутренний порт, доступный только через gateway
+    expose:
+      - "8000"
+    environment:
+      - DATABASE_URL=postgresql://admin:supersecretpassword@db:5432/system_db
+      - ADMIN_EMAIL=admin@example.com
+      - ADMIN_PASSWORD=admin
+    networks:
+      - paas_network
+    depends_on:
+      - db
+    restart: always
+
+  # База данных
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: supersecretpassword
+      POSTGRES_DB: system_db
+    networks:
+      - paas_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d system_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+networks:
+  paas_network:
+    name: paas_web_network
